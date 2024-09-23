@@ -8,16 +8,16 @@ library(tibble)
 library(ggplot2)
 library(RColorBrewer)
 
-getwd()gggplot2etwd()
+getwd()
 setwd("Documents/CS_Courses/Needle/Project/")
 
-repodb = read.csv("repodb_long.csv", row.names = 1)
+repodb = read.csv("repodb_for_final_visualization_medical_profile.csv", row.names = 1)
 repodb[repodb==""] <- "Not Tested"
 
 meds = factor(colnames(repodb), levels = colnames(repodb))
 diseases = factor(rownames(repodb),levels = rownames(repodb))
 long = data.frame(pivot_longer(repodb %>%  rownames_to_column("Disease"), cols = c(-"Disease"), 
-                               names_to = "Med"))
+                               names_to = "Drug"))
 
 colors = c("seashell", "darkgreen", "lightpink2", "brown2", "brown4", "brown3",
            "lightpink3", "steelblue3", "steelblue1", "steelblue4", "steelblue3",
@@ -35,4 +35,6 @@ ggplot(long_arranged, aes(Disease, Med)) +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank()) + 
   scale_fill_manual(values=colors)
+
+ggsave("drugs_diseases_map_medical_profiles.png")
 

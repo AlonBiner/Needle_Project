@@ -3,6 +3,7 @@ import numpy as np
 import sklearn
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import euclidean_distances
+from sklearn.metrics import pairwise_distances
 from seaborn import clustermap, heatmap
 from collections import defaultdict
 import plotly.graph_objects as go
@@ -15,6 +16,7 @@ from bokeh.models import ColumnDataSource, ImageRGBA, ColorBar, HoverTool
 from bokeh.plotting import figure
 from bokeh.transform import factor_cmap
 from bokeh.palettes import Category10
+import re
 
 def diseases_nan_values(diseases_df):
     type_nans = diseases_df['Type'].isna()
@@ -36,23 +38,46 @@ def run_tfidf(df):
     tfidf_df.index = df.index
     return tfidf_df
 
-def create_heatmap(tfidf_df):
-    dist_mat = pd.DataFrame(euclidean_distances(tfidf_df), index=tfidf_df.index, columns=tfidf_df.index)
+def create_heatmap(df, name, dist_callable):
+    dist_mat = dist_callable(df)
     clustered_heatmap = clustermap(dist_mat, figsize=(10, 10), yticklabels=False,xticklabels=False)
-    return clustered_heatmap
+    new_order = [df[name][i] for i in clustered_heatmap.dendrogram_row.reordered_ind]
+    print(new_order)
+    return clustered_heatmap, new_order
 
 
 def create_diseases_heatmap(name, profile_type):
     disease_profiles = pd.read_csv("nih_disease_info.csv")
     disease_profiles = disease_profiles[
         disease_profiles.Definition.notna() | disease_profiles.Pubmed_links.notna() | disease_profiles.Type.notna()].reset_index()
-    concatenated_df = pd.DataFrame({'index': disease_profiles['ind_name'],
-                                    'profile': disease_profiles['Type'].fillna('').str.cat(
-                                        disease_profiles['Definition'].fillna('').str.cat(
-                                            disease_profiles['Pubmed_links'].fillna('')), sep=' ')}).set_index('index')
-    dis_heatmap, new_order = concatenated_df_to_heatmap(concatenated_df, disease_profiles, name)
-    dis_heatmap.figure.savefig(f"disease_heatmap_{profile_type}.png")
+    # concatenated_df = pd.DataFrame({'index': disease_profiles['ind_name'],
+    #                                 'profile': disease_profiles['Type'].fillna('').str.cat(
+    #                                     disease_profiles['Definition'].fillna('').str.cat(
+    #                                         disease_profiles['Pubmed_links'].fillna('')), sep=' ')}).set_index('index')
+    # dis_heatmap, new_order = concatenated_df_to_heatmap(concatenated_df, disease_profiles, name)
+    dis_heatmap, new_order = create_heatmap(disease_profiles, name, calculate_disease_dist)
+    dis_heatmap.figure.savefig(f"disease_heatmap_{profile_type}_2.png")
     return dis_heatmap, new_order
+
+
+original_dummy_columns = ['Acquired Abnormality', 'Congenital Abnormality', 'Disease or Syndrome', 'Finding',
+                              'Injury or Poisoning', 'Mental or Behavioral Dysfunction', 'Neoplastic Process',
+                              'Pathologic Function', 'Sign or Symptom']
+def split_and_create_dummies(row):
+    categories = row.split(';')
+    return pd.Series([True] * len(categories) + [False] * (len(original_dummy_columns) - len(categories)), index=original_dummy_columns)
+
+def calculate_disease_dist(df, w_tfidf=0.75, w_type=0.25):
+    concatenated_df = pd.DataFrame({'index': df['ind_name'],
+                                    'profile': df['Definition'].fillna('').str.cat(
+                                            df['Pubmed_links'].fillna(''), sep=' ')}).set_index('index')
+    tfidf_mat = run_tfidf(concatenated_df)
+    tfidf_dist_mat = pd.DataFrame(euclidean_distances(tfidf_mat), index=tfidf_mat.index, columns=tfidf_mat.index)
+    type_df = df['Type'].str.get_dummies(sep=';')
+    type_dist = pd.DataFrame(euclidean_distances(type_df), index=tfidf_mat.index,
+                 columns=tfidf_mat.index)
+    return w_tfidf * tfidf_dist_mat + w_type*type_dist
+
 
 
 def create_pivoted_dataframe(csv_file):
@@ -74,24 +99,46 @@ def create_pivoted_dataframe(csv_file):
 
     return pivoted_df
 
-def concatenated_df_to_heatmap(concatenated_df, profiles, name):
+# def concatenated_df_to_heatmap(concatenated_df, profiles, name):
+#     tfidf_mat = run_tfidf(concatenated_df)
+#     heatmap = create_heatmap(tfidf_mat)
+#     new_order = [profiles[name][i] for i in heatmap.dendrogram_row.reordered_ind]
+#     return heatmap, new_order
+
+def extract_numeric(s):
+    try:
+        avg_match = re.search(r'(\d+\.\d+)', s.split(':')[1])
+        mono_match = re.search(r'(\d+\.\d+)', s.split(':')[2])
+        return avg_match.group(1) if avg_match else None, \
+           mono_match.group(1) if mono_match else None
+    except Exception:
+        return 0, 0
+
+def calculate_drug_dist(df, w_tfidf=0.75, w_weight=0.25):
+    concatenated_df = pd.DataFrame({'index': df['Generic Name'],
+                                    'profile': df['Background'].fillna('').str.cat(
+                                        df['Summary'].fillna(''), sep=' ')}).set_index('index')
     tfidf_mat = run_tfidf(concatenated_df)
-    heatmap = create_heatmap(tfidf_mat)
-    new_order = [profiles[name][i] for i in heatmap.dendrogram_row.reordered_ind]
-    return heatmap, new_order
-
-
+    tfidf_dist_mat = pd.DataFrame(euclidean_distances(tfidf_mat), index=tfidf_mat.index, columns=tfidf_mat.index)
+    weight_dist = pd.DataFrame(euclidean_distances(df[['Average Weight', 'Monoisotopic Weight']]), index=tfidf_mat.index, columns=tfidf_mat.index)
+    return w_tfidf * tfidf_dist_mat + w_weight*weight_dist
 
 def create_drugs_heatmap(name, profile_type):
     drugs_profiles = pd.read_csv("drugbank_info_for_df.csv").drop_duplicates()
     drugs_profiles.replace('Not Available', np.nan, inplace=True)
     drugs_profiles = drugs_profiles[
         drugs_profiles['Summary'].notna() | drugs_profiles['Background'].notna()].reset_index()
-    concatenated_df = pd.DataFrame({'index': drugs_profiles['Generic Name'],
-                                    'profile': drugs_profiles['Background'].fillna('').str.cat(
-                                        drugs_profiles['Summary'].fillna(''), sep=' ')}).set_index('index')
-    drugs_heatmap, drugs_order = concatenated_df_to_heatmap(concatenated_df, drugs_profiles, name)
-    drugs_heatmap.figure.savefig(f"drugs_heatmap_{profile_type}.png")
+    drugs_profiles[['Average Weight', 'Monoisotopic Weight']] = drugs_profiles['Weight'].apply(extract_numeric).apply(pd.Series)
+    drugs_profiles['Average Weight'] = drugs_profiles['Average Weight'].astype(float)
+    drugs_profiles['Monoisotopic Weight'] = drugs_profiles['Monoisotopic Weight'].astype(float)
+    drugs_profiles['Average Weight'] /= 1000
+    drugs_profiles['Monoisotopic Weight'] /= 1000
+    # concatenated_df = pd.DataFrame({'index': drugs_profiles['Generic Name'],
+    #                                 'profile': drugs_profiles['Background'].fillna('').str.cat(
+    #                                     drugs_profiles['Summary'].fillna(''), sep=' ')}).set_index('index')
+    # drugs_heatmap, drugs_order = concatenated_df_to_heatmap(concatenated_df, drugs_profiles, name)
+    drugs_heatmap, drugs_order = create_heatmap(drugs_profiles, name, calculate_drug_dist)
+    drugs_heatmap.figure.savefig(f"drugs_heatmap_{profile_type}_2.png")
     return drugs_heatmap, drugs_order
 
 
@@ -224,10 +271,12 @@ def analyze_medical_profiles():
     disease_order = disease_order + [i for i in repodb_df.index.values if i not in disease_order]
     drugs_order = drugs_order + [i for i in repodb_df.columns.values if i not in drugs_order]
     # saves the df to csv, later the final visualization is done using R
-    reorder_df(repodb_df, disease_order, drugs_order).to_csv("repodb_for_final_visualization_medical_profile.csv")
+    reorder_df(repodb_df, disease_order, drugs_order).to_csv("repodb_for_final_visualization_medical_profile_2.csv")
 
 
 if __name__ == '__main__':
+    # create_diseases_heatmap('ind_name', 'medical_profile')
+    # create_drugs_heatmap('DrugBank Accession Number', 'medical_profile')
     analyze_medical_profiles()
     pass
 
