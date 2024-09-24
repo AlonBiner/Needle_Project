@@ -17,8 +17,19 @@ from bokeh.plotting import figure
 from bokeh.transform import factor_cmap
 from bokeh.palettes import Category10
 import re
+import rdkit
 
 def diseases_nan_values(diseases_df):
+    """
+        Analyzes a DataFrame of diseases to count NaN values in specified columns.
+
+        Parameters:
+            diseases_df (pd.DataFrame): DataFrame containing disease information.
+
+        Prints:
+            Number of NaN values in 'Type', 'Definition', and 'Pubmed_links' columns,
+            as well as combinations of these columns.
+        """
     type_nans = diseases_df['Type'].isna()
     definition_nans = diseases_df['Definition'].isna()
     links_nans = diseases_df['Pubmed_links'].isna()
@@ -32,6 +43,15 @@ def diseases_nan_values(diseases_df):
 
 
 def run_tfidf(df):
+    """
+        Computes the TF-IDF matrix for the 'profile' column in a DataFrame.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame containing a 'profile' column with text data.
+
+        Returns:
+            pd.DataFrame: A DataFrame representing the TF-IDF matrix.
+        """
     vectorizer = TfidfVectorizer(stop_words='english')
     tfidf_matrix = vectorizer.fit_transform(df['profile'])
     tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), columns=vectorizer.get_feature_names_out())
@@ -39,6 +59,17 @@ def run_tfidf(df):
     return tfidf_df
 
 def create_heatmap(df, name, dist_callable):
+    """
+        Creates a clustered heatmap from a distance matrix derived from the input DataFrame.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame containing the data to be clustered.
+            name (str): Column name used for labeling in the heatmap.
+            dist_callable (function): A callable function that computes distances.
+
+        Returns:
+            tuple: The clustered heatmap object and a list of new order of indices.
+        """
     dist_mat = dist_callable(df)
     clustered_heatmap = clustermap(dist_mat, figsize=(10, 10), yticklabels=False,xticklabels=False)
     new_order = [df[name][i] for i in clustered_heatmap.dendrogram_row.reordered_ind]
@@ -47,14 +78,20 @@ def create_heatmap(df, name, dist_callable):
 
 
 def create_diseases_heatmap(name, profile_type):
+    """
+        Creates a heatmap for diseases by loading disease profiles from a CSV file,
+        filtering them, and computing distances.
+
+        Parameters:
+            name (str): Column name used for labeling in the heatmap.
+            profile_type (str): Type of profile to be indicated in the output filename.
+
+        Returns:
+            tuple: The heatmap object and a new order of indices.
+        """
     disease_profiles = pd.read_csv("nih_disease_info.csv")
     disease_profiles = disease_profiles[
         disease_profiles.Definition.notna() | disease_profiles.Pubmed_links.notna() | disease_profiles.Type.notna()].reset_index()
-    # concatenated_df = pd.DataFrame({'index': disease_profiles['ind_name'],
-    #                                 'profile': disease_profiles['Type'].fillna('').str.cat(
-    #                                     disease_profiles['Definition'].fillna('').str.cat(
-    #                                         disease_profiles['Pubmed_links'].fillna('')), sep=' ')}).set_index('index')
-    # dis_heatmap, new_order = concatenated_df_to_heatmap(concatenated_df, disease_profiles, name)
     dis_heatmap, new_order = create_heatmap(disease_profiles, name, calculate_disease_dist)
     dis_heatmap.figure.savefig(f"disease_heatmap_{profile_type}_2.png")
     return dis_heatmap, new_order
@@ -64,10 +101,30 @@ original_dummy_columns = ['Acquired Abnormality', 'Congenital Abnormality', 'Dis
                               'Injury or Poisoning', 'Mental or Behavioral Dysfunction', 'Neoplastic Process',
                               'Pathologic Function', 'Sign or Symptom']
 def split_and_create_dummies(row):
+    """
+        Splits a string of categories into dummy variables for a predefined set of columns.
+
+        Parameters:
+            row (str): A string of categories separated by semicolons.
+
+        Returns:
+            pd.Series: A Series with boolean values indicating presence of categories.
+        """
     categories = row.split(';')
     return pd.Series([True] * len(categories) + [False] * (len(original_dummy_columns) - len(categories)), index=original_dummy_columns)
 
 def calculate_disease_dist(df, w_tfidf=0.75, w_type=0.25):
+    """
+        Calculates a combined distance metric for diseases based on TF-IDF and type dummy variables.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame containing disease profiles and types.
+            w_tfidf (float): Weight for the TF-IDF distance component.
+            w_type (float): Weight for the type distance component.
+
+        Returns:
+            pd.DataFrame: A DataFrame representing the combined distance matrix.
+        """
     concatenated_df = pd.DataFrame({'index': df['ind_name'],
                                     'profile': df['Definition'].fillna('').str.cat(
                                             df['Pubmed_links'].fillna(''), sep=' ')}).set_index('index')
@@ -81,6 +138,15 @@ def calculate_disease_dist(df, w_tfidf=0.75, w_type=0.25):
 
 
 def create_pivoted_dataframe(csv_file):
+    """
+        Creates a pivoted DataFrame from a CSV file containing drug data.
+
+        Parameters:
+            csv_file (str): Path to the CSV file with drug information.
+
+        Returns:
+            pd.DataFrame: A pivoted DataFrame indexed by drugbank_id with drug status and phase.
+        """
     df = pd.read_csv(csv_file)
     drug_data = defaultdict(lambda: defaultdict(str))
     for _, row in df.iterrows():
@@ -99,13 +165,18 @@ def create_pivoted_dataframe(csv_file):
 
     return pivoted_df
 
-# def concatenated_df_to_heatmap(concatenated_df, profiles, name):
-#     tfidf_mat = run_tfidf(concatenated_df)
-#     heatmap = create_heatmap(tfidf_mat)
-#     new_order = [profiles[name][i] for i in heatmap.dendrogram_row.reordered_ind]
-#     return heatmap, new_order
+
 
 def extract_numeric(s):
+    """
+        Extracts numeric values from a specific formatted string.
+
+        Parameters:
+            s (str): A string containing numeric values in a predefined format.
+
+        Returns:
+            tuple: Extracted average and monoisotopic weight as strings, or (0, 0) on failure.
+        """
     try:
         avg_match = re.search(r'(\d+\.\d+)', s.split(':')[1])
         mono_match = re.search(r'(\d+\.\d+)', s.split(':')[2])
@@ -115,6 +186,17 @@ def extract_numeric(s):
         return 0, 0
 
 def calculate_drug_dist(df, w_tfidf=0.75, w_weight=0.25):
+    """
+        Calculates a combined distance metric for drugs based on TF-IDF and weight attributes.
+
+        Parameters:
+            df (pd.DataFrame): DataFrame containing drug profiles.
+            w_tfidf (float): Weight for the TF-IDF distance component.
+            w_weight (float): Weight for the weight distance component.
+
+        Returns:
+            pd.DataFrame: A DataFrame representing the combined distance matrix.
+        """
     concatenated_df = pd.DataFrame({'index': df['Generic Name'],
                                     'profile': df['Background'].fillna('').str.cat(
                                         df['Summary'].fillna(''), sep=' ')}).set_index('index')
@@ -124,6 +206,17 @@ def calculate_drug_dist(df, w_tfidf=0.75, w_weight=0.25):
     return w_tfidf * tfidf_dist_mat + w_weight*weight_dist
 
 def create_drugs_heatmap(name, profile_type):
+    """
+        Creates a heatmap for drugs by loading drug profiles from a CSV file,
+        processing weights, and computing distances.
+
+        Parameters:
+            name (str): Column name used for labeling in the heatmap.
+            profile_type (str): Type of profile to be indicated in the output filename.
+
+        Returns:
+            tuple: The heatmap object and a new order of indices.
+        """
     drugs_profiles = pd.read_csv("drugbank_info_for_df.csv").drop_duplicates()
     drugs_profiles.replace('Not Available', np.nan, inplace=True)
     drugs_profiles = drugs_profiles[
@@ -133,10 +226,6 @@ def create_drugs_heatmap(name, profile_type):
     drugs_profiles['Monoisotopic Weight'] = drugs_profiles['Monoisotopic Weight'].astype(float)
     drugs_profiles['Average Weight'] /= 1000
     drugs_profiles['Monoisotopic Weight'] /= 1000
-    # concatenated_df = pd.DataFrame({'index': drugs_profiles['Generic Name'],
-    #                                 'profile': drugs_profiles['Background'].fillna('').str.cat(
-    #                                     drugs_profiles['Summary'].fillna(''), sep=' ')}).set_index('index')
-    # drugs_heatmap, drugs_order = concatenated_df_to_heatmap(concatenated_df, drugs_profiles, name)
     drugs_heatmap, drugs_order = create_heatmap(drugs_profiles, name, calculate_drug_dist)
     drugs_heatmap.figure.savefig(f"drugs_heatmap_{profile_type}_2.png")
     return drugs_heatmap, drugs_order
@@ -144,6 +233,17 @@ def create_drugs_heatmap(name, profile_type):
 
 
 def reorder_df(df, disease_order, drug_order):
+    """
+        Reorders a DataFrame based on specified orders for diseases and drugs.
+
+        Parameters:
+            df (pd.DataFrame): The DataFrame to be reordered.
+            disease_order (list): The new order of disease indices.
+            drug_order (list): The new order of drug columns.
+
+        Returns:
+            pd.DataFrame: The reordered DataFrame.
+        """
     df_reordered = df.reindex(index=disease_order)
     df_reordered = df_reordered[drug_order]
     return df_reordered
@@ -265,6 +365,12 @@ def reorder_df(df, disease_order, drug_order):
 
 
 def analyze_medical_profiles():
+    """
+        Main function to analyze medical profiles by creating disease and drug heatmaps,
+        pivoting data, and saving the result for visualization.
+
+        It orchestrates the overall analysis flow and saves a combined CSV file for final visualization.
+        """
     diseases_heatmap, disease_order = create_diseases_heatmap('ind_name', 'medical_profile')
     drugs_heatmap, drugs_order = create_drugs_heatmap('DrugBank Accession Number', 'medical_profile')
     repodb_df = create_pivoted_dataframe("repodb.csv")
