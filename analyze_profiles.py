@@ -93,6 +93,9 @@ def create_diseases_heatmap(name, profile_type):
     disease_profiles = disease_profiles[
         disease_profiles.Definition.notna() | disease_profiles.Pubmed_links.notna() | disease_profiles.Type.notna()].reset_index()
     dis_heatmap, new_order = create_heatmap(disease_profiles, name, calculate_disease_dist)
+    dis_heatmap.figure.suptitle("Heatmap of Diseases over Diseases, clustered by distance between Diseases", y=0.9, fontsize=16)
+    dis_heatmap.ax_heatmap.set_ylabel("Diseases")
+    dis_heatmap.ax_heatmap.set_xlabel("Disease")
     dis_heatmap.figure.savefig(f"disease_heatmap_{profile_type}_2.png")
     return dis_heatmap, new_order
 
@@ -227,6 +230,9 @@ def create_drugs_heatmap(name, profile_type):
     drugs_profiles['Average Weight'] /= 1000
     drugs_profiles['Monoisotopic Weight'] /= 1000
     drugs_heatmap, drugs_order = create_heatmap(drugs_profiles, name, calculate_drug_dist)
+    drugs_heatmap.figure.suptitle("Heatmap of Drug over Drug, clustered by distance between Drugs", y=0.9, fontsize=16)
+    drugs_heatmap.ax_heatmap.set_ylabel("Drug")
+    drugs_heatmap.ax_heatmap.set_xlabel("Drug")
     drugs_heatmap.figure.savefig(f"drugs_heatmap_{profile_type}_2.png")
     return drugs_heatmap, drugs_order
 
@@ -377,7 +383,7 @@ def analyze_medical_profiles():
     disease_order = disease_order + [i for i in repodb_df.index.values if i not in disease_order]
     drugs_order = drugs_order + [i for i in repodb_df.columns.values if i not in drugs_order]
     # saves the df to csv, later the final visualization is done using R
-    reorder_df(repodb_df, disease_order, drugs_order).to_csv("repodb_for_final_visualization_medical_profile_2.csv")
+    #reorder_df(repodb_df, disease_order, drugs_order).to_csv("repodb_for_final_visualization_medical_profile_2.csv")
 
 
 if __name__ == '__main__':
