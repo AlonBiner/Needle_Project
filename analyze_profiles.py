@@ -203,9 +203,15 @@ def calculate_drug_dist(df, w_tfidf=0.75, w_weight=0.25):
     concatenated_df = pd.DataFrame({'index': df['Generic Name'],
                                     'profile': df['Background'].fillna('').str.cat(
                                         df['Summary'].fillna(''), sep=' ')}).set_index('index')
+    df[['Average Weight', 'Monoisotopic Weight']] = df['Weight'].apply(extract_numeric).apply(
+        pd.Series)
+    df['Average Weight'] = df['Average Weight'].astype(float)
+    df['Monoisotopic Weight'] = df['Monoisotopic Weight'].astype(float)
+    df['Average Weight'] /= 1000
+    df['Monoisotopic Weight'] /= 1000
     tfidf_mat = run_tfidf(concatenated_df)
     tfidf_dist_mat = pd.DataFrame(euclidean_distances(tfidf_mat), index=tfidf_mat.index, columns=tfidf_mat.index)
-    weight_dist = pd.DataFrame(euclidean_distances(df[['Average Weight', 'Monoisotopic Weight']]), index=tfidf_mat.index, columns=tfidf_mat.index)
+    weight_dist = pd.DataFrame(pairwise_distances((df['Average Weight']).values.reshape(-1,1), metric='cityblock'), index=tfidf_mat.index, columns=tfidf_mat.index)
     return w_tfidf * tfidf_dist_mat + w_weight*weight_dist
 
 def create_drugs_heatmap(name, profile_type):
@@ -224,16 +230,11 @@ def create_drugs_heatmap(name, profile_type):
     drugs_profiles.replace('Not Available', np.nan, inplace=True)
     drugs_profiles = drugs_profiles[
         drugs_profiles['Summary'].notna() | drugs_profiles['Background'].notna()].reset_index()
-    drugs_profiles[['Average Weight', 'Monoisotopic Weight']] = drugs_profiles['Weight'].apply(extract_numeric).apply(pd.Series)
-    drugs_profiles['Average Weight'] = drugs_profiles['Average Weight'].astype(float)
-    drugs_profiles['Monoisotopic Weight'] = drugs_profiles['Monoisotopic Weight'].astype(float)
-    drugs_profiles['Average Weight'] /= 1000
-    drugs_profiles['Monoisotopic Weight'] /= 1000
     drugs_heatmap, drugs_order = create_heatmap(drugs_profiles, name, calculate_drug_dist)
     drugs_heatmap.figure.suptitle("Heatmap of Drug over Drug, clustered by distance between Drugs", y=0.9, fontsize=16)
     drugs_heatmap.ax_heatmap.set_ylabel("Drug")
     drugs_heatmap.ax_heatmap.set_xlabel("Drug")
-    drugs_heatmap.figure.savefig(f"drugs_heatmap_{profile_type}_2.png")
+    drugs_heatmap.figure.savefig(f"drugs_heatmap_{profile_type}_3.png")
     return drugs_heatmap, drugs_order
 
 
@@ -377,11 +378,11 @@ def analyze_medical_profiles():
 
         It orchestrates the overall analysis flow and saves a combined CSV file for final visualization.
         """
-    diseases_heatmap, disease_order = create_diseases_heatmap('ind_name', 'medical_profile')
+    # diseases_heatmap, disease_order = create_diseases_heatmap('ind_name', 'medical_profile')
     drugs_heatmap, drugs_order = create_drugs_heatmap('DrugBank Accession Number', 'medical_profile')
     repodb_df = create_pivoted_dataframe("repodb.csv")
-    disease_order = disease_order + [i for i in repodb_df.index.values if i not in disease_order]
-    drugs_order = drugs_order + [i for i in repodb_df.columns.values if i not in drugs_order]
+    # disease_order = disease_order + [i for i in repodb_df.index.values if i not in disease_order]
+    # drugs_order = drugs_order + [i for i in repodb_df.columns.values if i not in drugs_order]
     # saves the df to csv, later the final visualization is done using R
     #reorder_df(repodb_df, disease_order, drugs_order).to_csv("repodb_for_final_visualization_medical_profile_2.csv")
 

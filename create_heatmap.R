@@ -20,7 +20,7 @@ long = data.frame(pivot_longer(repodb %>%  rownames_to_column("Disease"), cols =
                                names_to = "Drug"))
 
 
-colors = c("seashell", "darkgreen", "lightpink1", "lightpink2", "lightpink3",
+colors = c( "darkgreen","seashell", "lightpink1", "lightpink2", "lightpink3",
            "lightpink3", "lightpink4", "lightpink4", "brown1","brown2", "brown3", "brown3",
            "brown4", "brown4", "steelblue1", "steelblue2","steelblue3", "steelblue3",
            "steelblue4", "steelblue4")
