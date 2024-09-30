@@ -4,7 +4,7 @@ from pandas import DataFrame, Series
 import re
 from recommendation_system import RecommendationSystem
 from analyze_profiles import calculate_drug_dist, calculate_disease_dist
-from analyze_profiles import load_medical_drugs_profiles
+from analyze_profiles import load_medical_drugs_profiles, load_medical_diseases_profiles
 
 status_to_rating_map = {
     'Approved': 1,
@@ -110,10 +110,6 @@ def _adjust_to_rating_of_status(rating):
     return rating_of_statuses[closest_index]
 
 
-def load_profiles_of_diseases():
-    profiles_of_diseases = pd.read_csv('nih_disease_info.csv')
-    return profiles_of_diseases
-
 def limit_to_items_with_profile(train_set, test_set, item_encoding, item_profiles):
     limited_train_set = train_set[train_set['Item'].isin(item_profiles['DrugBank Accession Number'])]
     limited_test_set = test_set[test_set['Item'].isin(item_profiles['DrugBank Accession Number'])]
@@ -125,21 +121,28 @@ if __name__ == "__main__":
     recommendation_system = RecommendationSystem()
     recommendation_system.fit() #  אין אימון כרגע... לעדכן.
 
-    #user_profiles = load_profiles_of_diseases()
-    #distance_func_for_users = calculate_disease_dist
+    # Predict user-profiles
+    user_profiles = load_medical_diseases_profiles()
+    distance_func_for_users = calculate_disease_dist
+    #
+    train_set = train_set[train_set['User'].isin(user_profiles['ind_name'])] # TODO: גם כאן, אני לא אמור לדעת מה השם של העמודה של המחלות של פרופיל משתמש מסוים. צריך שאלומה תשנה את זה.
+    test_set = train_set[train_set['User'].isin(user_profiles['ind_name'])]
+    disease_name_to_disease_name_map = {disease: disease for disease in user_profiles['ind_name']}  # TODO: זה משהו שאלומה צריכה להגדיר אצלה. אני לא מור לדעת מה זה genric name.
+    # עבור שגיאה עבור מיפוי אז שגיאה מאז מיפוי... למה שגיאה במיפוי? אין key בשם ind name??
+    predictions = recommendation_system.predict(train_set, test_set, user_profiles, distance_func_for_users,
+                                                disease_name_to_disease_name_map, k=5)
+    postprocess(predictions)
 
-    #predictions = recommendation_system.predict(train_set, test_set, user_profiles, distance_func_for_users, k=5)
-    #postprocess(predictions)
 
-    item_profiles = load_medical_drugs_profiles()
-    distance_func_for_items = calculate_drug_dist
-    drug_name_to_dbank_number_map = item_profiles.set_index('Generic Name')['DrugBank Accession Number'].to_dict()  # TODO: זה משהו שאלומה צריכה להגדיר אצלה. אני לא מור לדעת מה זה genric name.
-    # TODO: אפשר שתקודד אצלה בתור drug name
-    # TODO: לא אמור לדעת מה זה DrugBankAccessor Number אפשר שתקודד אצלה בתור drug band number...
-    train_set, test_set = limit_to_items_with_profile(train_set, test_set, 'DrugBank Accession Number', item_profiles)
-    predictions_item_item = recommendation_system.predict_item_item(train_set, test_set, item_profiles, distance_func_for_items, drug_name_to_dbank_number_map, k=5)
-    updated_data = postprocess(predictions_item_item)
-    updated_data.to_csv('updated_data.csv')
+    # item_profiles = load_medical_drugs_profiles()
+    # distance_func_for_items = calculate_drug_dist
+    # drug_name_to_dbank_number_map = item_profiles.set_index('Generic Name')['DrugBank Accession Number'].to_dict()  # TODO: זה משהו שאלומה צריכה להגדיר אצלה. אני לא מור לדעת מה זה genric name.
+    # # TODO: אפשר שתקודד אצלה בתור drug name
+    # # TODO: לא אמור לדעת מה זה DrugBankAccessor Number אפשר שתקודד אצלה בתור drug band number...
+    # train_set, test_set = limit_to_items_with_profile(train_set, test_set, 'DrugBank Accession Number', item_profiles)
+    # predictions_item_item = recommendation_system.predict_item_item(train_set, test_set, item_profiles, distance_func_for_items, drug_name_to_dbank_number_map, k=5)
+    # updated_data = postprocess(predictions_item_item)
+    # updated_data.to_csv('updated_data.csv')
 
     # איך נציג את התוצאות?
     # רוצים לעשות השוואה לפי פרופיל...

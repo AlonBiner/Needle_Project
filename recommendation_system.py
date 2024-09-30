@@ -63,14 +63,18 @@ class RecommendationSystem:
         else:
             return pd.Index([])
 
-    def predict(self, train_set: DataFrame, test_set: DataFrame, user_profiles: DataFrame, distance_func, k=10):
+    def predict(self, train_set: DataFrame, test_set: DataFrame, user_profiles: DataFrame, distance_func,
+                mapping_to_user, k=10):
         predictions = test_set.copy() # TODO: אולי עדיף לקרוא לזה predictions ולא recommendations
 
         similarities_between_users = distance_func(user_profiles)
+        similarities_between_users = similarities_between_users.rename(index=mapping_to_user) # לבדוק שמס' משתמשים בדמיונות זה אותו מס' משתמשים ב-test set
         similarities_between_users = similarities_between_users[similarities_between_users.index.isin(test_set['User'])] # All rows of distances will be diseases of test set... # check all rows of similarities between users then check rows of users to see similarities of test set # עבור דמיון עבור מחלה עבור שורה  עבור train_set עבור עמודה. אז עובר דמיון יש שם מחלה שמתאים לה עבור מוצר עבור tarin_set עבור מוצר אז עבור train_set עבור משתמש אז עבור train_set עבור עמודה עבור משתמש אז עבור train set יש עמודה משלו יש משתמש משלו בעמודה משלו ב-train_set אז עבור שם מוצר יש שם עמודה שמתאים לה
+
+        similarities_between_users = similarities_between_users.rename(columns=mapping_to_user) # רק לבדוק שמס' העמודות ב- similarities זה כמו מס' המשתמשים ב-train set עם פרופילים
         similarities_between_users = similarities_between_users[train_set['User'].unique()]
         train_matrix = train_set.pivot(index='User', columns='Item', values='Rating')
-
+        # עבור similarities עבור מס' שורות עבור מס' עמודות מצפה שמס' שורות יהיה 1303 ומס' עמודות יהיה 1303וזה בדיוק מה שיוצא זה עובד...
         for row_index, row in test_set.iterrows():
             user = row['User']
             item = row['Item']
