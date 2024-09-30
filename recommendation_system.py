@@ -74,7 +74,7 @@ class RecommendationSystem:
         similarities_between_users = similarities_between_users.rename(columns=mapping_to_user) # רק לבדוק שמס' העמודות ב- similarities זה כמו מס' המשתמשים ב-train set עם פרופילים
         similarities_between_users = similarities_between_users[train_set['User'].unique()]
         train_matrix = train_set.pivot(index='User', columns='Item', values='Rating')
-        # עבור similarities עבור מס' שורות עבור מס' עמודות מצפה שמס' שורות יהיה 1303 ומס' עמודות יהיה 1303וזה בדיוק מה שיוצא זה עובד...
+
         for row_index, row in test_set.iterrows():
             user = row['User']
             item = row['Item']
